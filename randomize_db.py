@@ -1,11 +1,11 @@
-import psycopg2
-from faker import Faker
+import csv
+import os
 import random
+from faker import Faker
 from datetime import datetime, timedelta
 
 fake = Faker('pl_PL')
 
-#Polish voivedoships
 
 voivodeships = [
     "dolnośląskie", "kujawsko-pomorskie", "lubelskie", "lubuskie",
@@ -13,8 +13,6 @@ voivodeships = [
     "podkarpackie", "podlaskie", "pomorskie", "śląskie",
     "świętokrzyskie", "warmińsko-mazurskie", "wielkopolskie", "zachodniopomorskie"
 ]
-
-#Brands
 
 brands = {
     "CPU": ["Intel", "AMD"],
@@ -36,9 +34,7 @@ cpu_sockets = {
 ram_types = ["DDR3", "DDR4", "DDR5"]
 disk_types = ["HDD", "SSD"]
 
-
-#Functions for generating components
-
+# Functions for components
 def generate_cpu():
     brand = random.choice(brands["CPU"])
     name = f"{brand} CPU {random.randint(1000,9999)}"
@@ -86,153 +82,145 @@ def generate_motherboard(cpu_info):
     ram_type = random.choice(ram_types)
     return {"type":"Motherboard","brand":brand,"name":name,"chipset":chipset,"socket":socket,"ram_type":ram_type}
 
-#PostgreSQL db connection
-conn = psycopg2.connect(
-    host="localhost",
-    database="yours_db_name",
-    user="yours_db_user",
-    password="yours_db_pswd"
-)
-cur = conn.cursor()
+# Main CSV generator
+def generate_csv_files(*, addresses_count: int, shops_count: int, clients_count: int,
+                       exporters_count: int, total_components: int):
+    
+    os.makedirs("tables", exist_ok=True)
 
-#Adresses generator
-addresses_count = 50
-for i in range(1, addresses_count + 1):
-    cur.execute("""
-        INSERT INTO "Addresses" ("Id","Voivodeship","Town","Postal_code","Street_name","House_number")
-        VALUES (%s,%s,%s,%s,%s,%s)
-    """,(i,random.choice(voivodeships),fake.city(),fake.postcode(),fake.street_name(),fake.building_number()))
 
-#Shops generator
-shops_count = 10
-for i in range(1, shops_count+1):
-    cur.execute("""
-        INSERT INTO "Shops" ("Id","Id_address","Name") VALUES (%s,%s,%s)
-    """,(i,random.randint(1,addresses_count),fake.company()))
+    # Addresses
+    addresses = []
+    with open("tables/addresses.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","voivodeship","town","postal_code","street_name","house_number"])
+        for i in range(1, addresses_count+1):
+            writer.writerow([i, random.choice(voivodeships), fake.city(), fake.postcode(), fake.street_name(), fake.building_number()])
+            addresses.append(i)
 
-#Clients generator
-clients_count = 100
-for i in range(1, clients_count+1):
-    cur.execute("""
-        INSERT INTO "Clients" ("Id","Name","Surname","Id_address")
-        VALUES (%s,%s,%s,%s)
-    """,(i,fake.first_name(),fake.last_name(),random.randint(1,addresses_count)))
+    # Shops
+    shops = []
+    with open("tables/shops.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_address","name"])
+        for i in range(1, shops_count+1):
+            address_id = random.choice(addresses)
+            writer.writerow([i, address_id, fake.company()])
+            shops.append(i)
 
-#Exporters generator
-exporters_count = 5
-countries = ['Poland','Germany','USA','China','Japan']
-for i in range(1, exporters_count+1):
-    cur.execute("""
-        INSERT INTO "Exporters" ("Id","Name","Country") VALUES (%s,%s,%s)
-    """,(i,fake.company(),random.choice(countries)))
+    # Clients
+    clients = []
+    with open("tables/clients.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","name","surname","id_address"])
+        for i in range(1, clients_count+1):
+            address_id = random.choice(addresses)
+            writer.writerow([i, fake.first_name(), fake.last_name(), address_id])
+            clients.append(i)
 
-#Components generator
-component_id = 1
-total_components = 300
-component_list = []
+    # Exporters
+    exporters = []
+    countries = ['Poland','Germany','USA','China','Japan']
+    with open("tables/exporters.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","name","country"])
+        for i in range(1, exporters_count+1):
+            writer.writerow([i, fake.company(), random.choice(countries)])
+            exporters.append(i)
 
-while component_id <= total_components:
-    ctype = random.choice(["CPU","GPU","RAM","PSU","Disk"])
-    if ctype == "CPU":
-        cpu = generate_cpu()
-        component_list.append(cpu)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,cpu["name"],cpu["brand"],cpu["type"]))
-        cur.execute("""
-            INSERT INTO "CPUs" ("Id_component","Cores","Threads","Clock_speed","Chipset","Socket")
-            VALUES (%s,%s,%s,%s,%s,%s)
-        """,(component_id,cpu["cores"],cpu["threads"],cpu["clock"],cpu["chipset"],cpu["socket"]))
+    # Components
+    component_ids = []
+    with open("tables/components.csv", "w", newline='', encoding='utf-8-sig') as f_comp, \
+        open("tables/cpus.csv", "w", newline='', encoding='utf-8-sig') as f_cpu, \
+        open("tables/gpus.csv", "w", newline='', encoding='utf-8-sig') as f_gpu, \
+        open("tables/rams.csv", "w", newline='', encoding='utf-8-sig') as f_ram, \
+        open("tables/psus.csv", "w", newline='', encoding='utf-8-sig') as f_psu, \
+        open("tables/disks.csv", "w", newline='', encoding='utf-8-sig') as f_disk, \
+        open("tables/motherboards.csv", "w", newline='', encoding='utf-8-sig') as f_mb:
 
-        #adding matching motherboard
-        mb = generate_motherboard(cpu)
-        component_list.append(mb)
-        component_id +=1
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,mb["name"],mb["brand"],mb["type"]))
-        cur.execute("""
-            INSERT INTO "Motherboards" ("Id_component","Chipset","Socket_type","RAM_type")
-            VALUES (%s,%s,%s,%s)
-        """,(component_id,mb["chipset"],mb["socket"],mb["ram_type"]))
+        w_comp = csv.writer(f_comp)
+        w_cpu = csv.writer(f_cpu)
+        w_gpu = csv.writer(f_gpu)
+        w_ram = csv.writer(f_ram)
+        w_psu = csv.writer(f_psu)
+        w_disk = csv.writer(f_disk)
+        w_mb = csv.writer(f_mb)
 
-    elif ctype == "GPU":
-        gpu = generate_gpu()
-        component_list.append(gpu)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,gpu["name"],gpu["brand"],gpu["type"]))
-        cur.execute("""
-            INSERT INTO "GPUs" ("Id_component","VRAM","VRAM_type") VALUES (%s,%s,%s)
-        """,(component_id,gpu["vram"],gpu["vram_type"]))
+        w_comp.writerow(["id","name","brand","type"])
+        w_cpu.writerow(["id_component","cores","threads","clock_speed","chipset","socket"])
+        w_gpu.writerow(["id_component","vram","vram_type"])
+        w_ram.writerow(["id_component","memory","socket_type","clock"])
+        w_psu.writerow(["id_component","power"])
+        w_disk.writerow(["id_component","memory","disk_type"])
+        w_mb.writerow(["id_component","chipset","socket_type","ram_type"])
 
-    elif ctype == "RAM":
-        ram = generate_ram()
-        component_list.append(ram)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,ram["name"],ram["brand"],ram["type"]))
-        cur.execute("""
-            INSERT INTO "RAMs" ("Id_component","Memory","Socket_type","Clock") VALUES (%s,%s,%s,%s)
-        """,(component_id,ram["memory"],ram["socket_type"],ram["clock"]))
+        cid = 1
+        while cid <= total_components:
+            ctype = random.choice(["CPU","GPU","RAM","PSU","Disk"])
+            if ctype == "CPU":
+                cpu = generate_cpu()
+                w_comp.writerow([cid, cpu["name"], cpu["brand"], cpu["type"]])
+                w_cpu.writerow([cid, cpu["cores"], cpu["threads"], cpu["clock"], cpu["chipset"], cpu["socket"]])
+                component_ids.append(cid)
+                cid += 1
+                mb = generate_motherboard(cpu)
+                w_comp.writerow([cid, mb["name"], mb["brand"], mb["type"]])
+                w_mb.writerow([cid, mb["chipset"], mb["socket"], mb["ram_type"]])
+                component_ids.append(cid)
+            elif ctype == "GPU":
+                gpu = generate_gpu()
+                w_comp.writerow([cid, gpu["name"], gpu["brand"], gpu["type"]])
+                w_gpu.writerow([cid, gpu["vram"], gpu["vram_type"]])
+                component_ids.append(cid)
+            elif ctype == "RAM":
+                ram = generate_ram()
+                w_comp.writerow([cid, ram["name"], ram["brand"], ram["type"]])
+                w_ram.writerow([cid, ram["memory"], ram["socket_type"], ram["clock"]])
+                component_ids.append(cid)
+            elif ctype == "PSU":
+                psu = generate_psu()
+                w_comp.writerow([cid, psu["name"], psu["brand"], psu["type"]])
+                w_psu.writerow([cid, psu["power"]])
+                component_ids.append(cid)
+            elif ctype == "Disk":
+                disk = generate_disk()
+                w_comp.writerow([cid, disk["name"], disk["brand"], disk["type"]])
+                w_disk.writerow([cid, disk["memory"], disk["disk_type"]])
+                component_ids.append(cid)
+            cid += 1
 
-    elif ctype == "PSU":
-        psu = generate_psu()
-        component_list.append(psu)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,psu["name"],psu["brand"],psu["type"]))
-        cur.execute("""
-            INSERT INTO "PSUs" ("Id_component","Power") VALUES (%s,%s)
-        """,(component_id,psu["power"]))
+    # Exporter_offers
+    with open("tables/exporter_offers.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_exporter","id_component","price"])
+        for i, comp_id in enumerate(component_ids, 1):
+            writer.writerow([i, random.choice(exporters), comp_id, round(random.uniform(50,2000),2)])
 
-    elif ctype == "Disk":
-        disk = generate_disk()
-        component_list.append(disk)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,disk["name"],disk["brand"],disk["type"]))
-        cur.execute("""
-            INSERT INTO "Disks" ("Id_component","Memory","Disk_type") VALUES (%s,%s,%s)
-        """,(component_id,disk["memory"],disk["disk_type"]))
+    # Imports
+    with open("tables/imports.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_component","id_shop","id_exporter","delivery_type",
+                        "delivery_placement_date","expected_delivery_date","real_delivery_date",
+                        "component_quantity","sum_of_import"])
+        for i in range(1,51):
+            comp_id = random.choice(component_ids)
+            shop_id = random.choice(shops)
+            exporter_id = random.choice(exporters)
+            delivery_start = datetime.now() - timedelta(days=random.randint(0,30))
+            delivery_end = delivery_start + timedelta(days=random.randint(1,10))
+            writer.writerow([i, comp_id, shop_id, exporter_id, random.choice(['Air','Sea','Land']),
+                            delivery_start, delivery_end, delivery_end + timedelta(days=random.randint(0,2)),
+                            random.randint(1,50), round(random.uniform(100,10000),2)])
 
-    component_id +=1
+    # Sales
+    with open("tables/sales.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_component","id_client","id_shop","date_of_sell","price","quantity"])
+        for i in range(1,101):
+            comp_id = random.choice(component_ids)
+            client_id = random.choice(clients)
+            shop_id = random.choice(shops)
+            sale_date = datetime.now() - timedelta(days=random.randint(0,60))
+            writer.writerow([i, comp_id, client_id, shop_id, sale_date, round(random.uniform(50,2000),2), random.randint(1,5)])
 
-#
-#Exporter offers generator
-#
-for i in range(1, total_components+1):
-    cur.execute("""
-        INSERT INTO "Exporter_offers" ("Id","Id_exporter","Id_component","Price")
-        VALUES (%s,%s,%s,%s)
-    """,(i,random.randint(1,exporters_count),i,round(random.uniform(50,2000),2)))
-
-#Imports to shops generator
-for i in range(1, 51):
-    delivery_start = datetime.now() - timedelta(days=random.randint(0,30))
-    delivery_end = delivery_start + timedelta(days=random.randint(1,10))
-    cur.execute("""
-        INSERT INTO "Imports" ("Id","Id_component","Id_shop","Id_exporter","Delivery_type",
-        "Delivery_placement_date","Expected_delivery_date","Real_delivery_date",
-        "Component_quantity","Sum_of_import")
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """,(i,random.randint(1,total_components),random.randint(1,shops_count),
-          random.randint(1,exporters_count),random.choice(['Air','Sea','Land']),
-          delivery_start,delivery_end,delivery_end + timedelta(days=random.randint(0,2)),
-          random.randint(1,50),round(random.uniform(100,10000),2)))
-
-#Sales generator
-for i in range(1, 101):
-    sale_date = datetime.now() - timedelta(days=random.randint(0,60))
-    cur.execute("""
-        INSERT INTO "Sales" ("Id","Id_component","Id_client","Id_shop","Date_of_sell","Price","Quantity")
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
-    """,(i,random.randint(1,total_components),random.randint(1,clients_count),
-          random.randint(1,shops_count),sale_date,round(random.uniform(50,2000),2),random.randint(1,5)))
-
-#Database committing and closing
-conn.commit()
-cur.close()
-conn.close()
-
-print("Your database was successfully filled with random data!")
+    print("CSV files generated with consistent foreign keys!")
