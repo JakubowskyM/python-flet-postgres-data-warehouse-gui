@@ -83,9 +83,9 @@ def generate_motherboard(cpu_info):
     return {"type":"Motherboard","brand":brand,"name":name,"chipset":chipset,"socket":socket,"ram_type":ram_type}
 
 # Main CSV generator
-def generate_csv_files(*, addresses_count: int, shops_count: int, clients_count: int,
-                       exporters_count: int, total_components: int):
-    
+def generate_csv_files(*, addresses_count = 20, shops_count = 10, clients_count = 50,
+                       exporters_count = 15, total_components = 200):
+
     os.makedirs("tables", exist_ok=True)
 
 
@@ -223,4 +223,4 @@ def generate_csv_files(*, addresses_count: int, shops_count: int, clients_count:
             sale_date = datetime.now() - timedelta(days=random.randint(0,60))
             writer.writerow([i, comp_id, client_id, shop_id, sale_date, round(random.uniform(50,2000),2), random.randint(1,5)])
 
-    print("CSV files generated with consistent foreign keys!")
+    return 1
