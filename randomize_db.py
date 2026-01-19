@@ -7,12 +7,24 @@ from datetime import datetime, timedelta
 fake = Faker('pl_PL')
 
 
-voivodeships = [
-    "dolnośląskie", "kujawsko-pomorskie", "lubelskie", "lubuskie",
-    "łódzkie", "małopolskie", "mazowieckie", "opolskie",
-    "podkarpackie", "podlaskie", "pomorskie", "śląskie",
-    "świętokrzyskie", "warmińsko-mazurskie", "wielkopolskie", "zachodniopomorskie"
-]
+PL_CITIES = {
+    "mazowieckie": ["Warszawa", "Radom", "Płock", "Siedlce", "Ostrołęka", "Pruszków", "Legionowo", "Piaseczno", "Mińsk Mazowiecki"],
+    "małopolskie": ["Kraków", "Tarnów", "Nowy Sącz", "Oświęcim", "Zakopane", "Wadowice", "Chrzanów", "Bochnia"],
+    "śląskie": ["Katowice", "Gliwice", "Zabrze", "Rybnik", "Częstochowa", "Sosnowiec", "Bytom", "Tychy", "Dąbrowa Górnicza", "Bielsko-Biała", "Jaworzno"],
+    "wielkopolskie": ["Poznań", "Kalisz", "Konin", "Leszno", "Piła", "Gniezno", "Ostrów Wielkopolski", "Krotoszyn"],
+    "dolnośląskie": ["Wrocław", "Legnica", "Wałbrzych", "Jelenia Góra", "Lubin", "Świdnica", "Głogów", "Bolesławiec"],
+    "pomorskie": ["Gdańsk", "Gdynia", "Sopot", "Słupsk", "Wejherowo", "Rumia", "Starogard Gdański", "Tczew"],
+    "zachodniopomorskie": ["Szczecin", "Koszalin", "Stargard", "Kołobrzeg", "Świnoujście", "Szczecinek"],
+    "lubelskie": ["Lublin", "Chełm", "Zamość", "Biała Podlaska", "Puławy", "Świdnik", "Kraśnik"],
+    "łódzkie": ["Łódź", "Piotrków Trybunalski", "Tomaszów Mazowiecki", "Bełchatów", "Skierniewice", "Zgierz", "Pabianice"],
+    "podkarpackie": ["Rzeszów", "Przemyśl", "Stalowa Wola", "Mielec", "Tarnobrzeg", "Krosno", "Sanok", "Jarosław"],
+    "kujawsko-pomorskie": ["Bydgoszcz", "Toruń", "Włocławek", "Grudziądz", "Inowrocław", "Brodnica"],
+    "warmińsko-mazurskie": ["Olsztyn", "Elbląg", "Ełk", "Ostróda", "Giżycko", "Iława"],
+    "podlaskie": ["Białystok", "Suwałki", "Łomża", "Augustów", "Zambrów", "Bielsk Podlaski"],
+    "opolskie": ["Opole", "Kędzierzyn-Koźle", "Nysa", "Brzeg", "Kluczbork", "Prudnik"],
+    "lubuskie": ["Gorzów Wielkopolski", "Zielona Góra", "Nowa Sól", "Żary", "Żagań", "Świebodzin"],
+    "świętokrzyskie": ["Kielce", "Ostrowiec Świętokrzyski", "Starachowice", "Skarżysko-Kamienna", "Sandomierz", "Końskie"]
+}
 
 brands = {
     "CPU": ["Intel", "AMD"],
@@ -82,6 +94,19 @@ def generate_motherboard(cpu_info):
     ram_type = random.choice(ram_types)
     return {"type":"Motherboard","brand":brand,"name":name,"chipset":chipset,"socket":socket,"ram_type":ram_type}
 
+def generate_address():
+    voivodeship = random.choice(list(PL_CITIES.keys()))
+    city = random.choice(PL_CITIES[voivodeship])
+
+    return {
+        "voivodeship": voivodeship,
+        "town": city,
+        "postal_code": fake.postcode(),
+        "street": fake.street_name(),
+        "house_number": fake.building_number()
+    }
+
+
 # Main CSV generator
 def generate_csv_files(*, addresses_count = 20, shops_count = 10, clients_count = 50,
                        exporters_count = 15, total_components = 200):
@@ -95,7 +120,8 @@ def generate_csv_files(*, addresses_count = 20, shops_count = 10, clients_count 
         writer = csv.writer(f)
         writer.writerow(["id","voivodeship","town","postal_code","street_name","house_number"])
         for i in range(1, addresses_count+1):
-            writer.writerow([i, random.choice(voivodeships), fake.city(), fake.postcode(), fake.street_name(), fake.building_number()])
+            town_and_voivodeship = generate_address()
+            writer.writerow([i, town_and_voivodeship["voivodeship"], town_and_voivodeship["town"], town_and_voivodeship["postal_code"], town_and_voivodeship["street"], town_and_voivodeship["house_number"]])
             addresses.append(i)
 
     # Shops

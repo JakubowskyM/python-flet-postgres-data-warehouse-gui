@@ -4,6 +4,46 @@ import psycopg2
 from psycopg2 import sql
 import randomize_db as rddb
 
+def database_exists(db_name: str, password: str):
+    """
+    Returns:
+    - "exists"      -> baza już istnieje
+    - "not_exists"  -> baza nie istnieje
+    - "auth_error"  -> błędne hasło / brak dostępu do serwera
+    """
+
+    try:
+        conn = psycopg2.connect(
+            host="localhost",
+            database="postgres",
+            user="postgres",
+            password=password,
+            connect_timeout=3
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s",
+            (db_name,)
+        )
+
+        exists = cur.fetchone() is not None
+
+        cur.close()
+        conn.close()
+
+        return "exists" if exists else "not_exists"
+
+    except psycopg2.OperationalError:
+        # typowy błąd: złe hasło / brak połączenia
+        return "auth_error"
+
+    except Exception as e:
+        print("Nieoczekiwany błąd:", e)
+        return "auth_error"
+
+
 def generate_structure(db_name: str, password: str,
                        generate_csv: bool, create_db: bool):
     """
@@ -36,7 +76,7 @@ def generate_structure(db_name: str, password: str,
                 
 
     elif create_db and generate_csv:
-
+            
             os.makedirs("tables", exist_ok=True)
             rddb.generate_csv_files(
                 addresses_count=50, shops_count=10,
