@@ -108,8 +108,8 @@ def generate_address():
 
 
 # Main CSV generator
-def generate_csv_files(*, addresses_count = 20, shops_count = 10, clients_count = 50,
-                       exporters_count = 15, total_components = 200):
+def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count = 500,
+                       exporters_count = 15, total_components = 2000):
 
     os.makedirs("tables", exist_ok=True)
 
@@ -232,8 +232,8 @@ def generate_csv_files(*, addresses_count = 20, shops_count = 10, clients_count 
             comp_id = random.choice(component_ids)
             shop_id = random.choice(shops)
             exporter_id = random.choice(exporters)
-            delivery_start = datetime.now() - timedelta(days=random.randint(0,30))
-            delivery_end = delivery_start + timedelta(days=random.randint(1,10))
+            delivery_start = fake.date_between(start_date='-365d', end_date='-345d')
+            delivery_end = delivery_start + timedelta(days=random.randint(1,14))
             writer.writerow([i, comp_id, shop_id, exporter_id, random.choice(['Air','Sea','Land']),
                             delivery_start, delivery_end, delivery_end + timedelta(days=random.randint(0,2)),
                             random.randint(1,50), round(random.uniform(100,10000),2)])
