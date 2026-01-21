@@ -2,7 +2,7 @@ import flet as ft
 import sys
 import os
 import dashboard as dashboard
-import colors as c
+
 from colors import DARK_PURPLE, LIGHT_PURPLE, PRIMARY_PURPLE, BACKGROUND
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -118,7 +118,7 @@ def handle_login(db_name_val, password_val):
 
 def show_start_view():
     page.controls.clear()
-
+    
     title = ft.Text(
         "OLAP Analytica",
         size=36,
@@ -318,6 +318,12 @@ def main(p: ft.Page):
     page.bgcolor = BACKGROUND
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
+    page.window_width = 1920
+    page.window_height = 1080
+    page.window_resizable = True     # opcjonalnie, okno można zmieniać
+    page.window_maximized = True 
+
+    page.update()
 
     navigate_to(show_start_view)
 
