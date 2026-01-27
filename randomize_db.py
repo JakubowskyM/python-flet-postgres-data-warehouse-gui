@@ -3,12 +3,10 @@ import os
 import random
 from faker import Faker
 from datetime import datetime, timedelta, time
-
 import math
 
 fake = Faker('pl_PL')
 
-# --- Dane pomocnicze ---
 PL_CITIES = {
     "mazowieckie": ["Warszawa", "Radom", "Płock", "Siedlce", "Ostrołęka", "Pruszków", "Legionowo", "Piaseczno", "Mińsk Mazowiecki"],
     "małopolskie": ["Kraków", "Tarnów", "Nowy Sącz", "Oświęcim", "Zakopane", "Wadowice", "Chrzanów", "Bochnia"],
@@ -53,16 +51,16 @@ def generate_price_with_step(min_val, max_val):
     decimal = random.choice([0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
     return round(base + decimal, 2)
 
-# --- Generatory komponentów ---
+# --- Komponenty z pełnymi kolumnami ---
 def generate_cpu():
     brand = random.choice(brands["CPU"])
     chipset = random.choice(cpu_chipsets[brand])
     cores = random.randint(2,32)
     threads = random.randint(max(cores,4),64)
-    name = f"{brand} {chipset} {cores}/{threads}"
     clock = round(random.randrange(20,61)/10,1)
     socket = random.choice(cpu_sockets[brand])
-    return {"type":"CPU","brand":brand,"name":name,"cores":cores,"threads":threads,"clock":clock,"chipset":chipset,"socket":socket}
+    name = f"{brand} {chipset} {cores}/{threads}"
+    return {"type":"CPU","brand":brand,"name":name,"cores":cores,"threads":threads,"clock_speed":clock,"chipset":chipset,"socket":socket}
 
 def generate_gpu():
     brand = random.choice(brands["GPU"])
@@ -98,7 +96,7 @@ def generate_motherboard(cpu_info):
     socket = cpu_info["socket"]
     ram_type = random.choice(ram_types)
     name = f"{brand} {socket} {chipset} {ram_type}"
-    return {"type":"Motherboard","brand":brand,"name":name,"chipset":chipset,"socket":socket,"ram_type":ram_type}
+    return {"type":"Motherboard","brand":brand,"name":name,"chipset":chipset,"socket_type":socket,"ram_type":ram_type}
 
 def generate_address():
     voivodeship = random.choice(list(PL_CITIES.keys()))
@@ -107,90 +105,126 @@ def generate_address():
         "voivodeship": voivodeship,
         "town": city,
         "postal_code": fake.postcode(),
-        "street": fake.street_name(),
+        "street_name": fake.street_name(),
         "house_number": fake.building_number()
     }
 
-# --- Generator CSV logiczny dla OLAP ---
+# --- Główny generator CSV ---
 def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count = 300,
                         exporters_count = 10, total_components = 100):
 
     os.makedirs("tables", exist_ok=True)
 
-    # --- Adresy ---
+    # --- Addresses ---
     addresses = []
     with open("tables/addresses.csv", "w", newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(["id","voivodeship","town","postal_code","street_name","house_number"])
         for i in range(1, addresses_count+1):
             addr = generate_address()
-            writer.writerow([i, addr["voivodeship"], addr["town"], addr["postal_code"], addr["street"], addr["house_number"]])
+            writer.writerow([i, addr["voivodeship"], addr["town"], addr["postal_code"], addr["street_name"], addr["house_number"]])
             addresses.append(i)
 
-    # --- Sklepy ---
+    # --- Shops ---
     shops = []
-    with open("tables/shops.csv", "w", newline='', encoding='utf-8-sig') as f:
+    with open("tables/shops.csv","w",newline='',encoding='utf-8-sig') as f:
         writer = csv.writer(f)
-        writer.writerow(["id","id_address","name"])
+        writer.writerow(["id","name","id_address"])
         for i in range(1, shops_count+1):
-            writer.writerow([i, random.choice(addresses), fake.company()])
+            writer.writerow([i, fake.company(), random.choice(addresses)])
             shops.append(i)
 
-    # --- Klienci ---
+    # --- Clients ---
     clients = []
-    with open("tables/clients.csv", "w", newline='', encoding='utf-8-sig') as f:
+    with open("tables/clients.csv","w",newline='',encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(["id","name","surname","id_address"])
         for i in range(1, clients_count+1):
             writer.writerow([i, fake.first_name(), fake.last_name(), random.choice(addresses)])
             clients.append(i)
 
-    # --- Eksporterzy ---
+    # --- Exporters ---
     exporters = []
-    countries = ['Poland','Germany','USA','China','Japan']
-    with open("tables/exporters.csv", "w", newline='', encoding='utf-8-sig') as f:
+    countries = ["Poland","Germany","USA","China","Japan"]
+    with open("tables/exporters.csv","w",newline='',encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(["id","name","country"])
         for i in range(1, exporters_count+1):
             writer.writerow([i, fake.company(), random.choice(countries)])
             exporters.append(i)
 
-    # --- Komponenty ---
+    # --- Components ---
     component_ids = []
     component_data = {}
-    with open("tables/components.csv", "w", newline='', encoding='utf-8-sig') as f_comp:
-        writer_comp = csv.writer(f_comp)
-        writer_comp.writerow(["id","name","brand","type"])
-        cid = 1
-        while cid <= total_components:
-            ctype = random.choice(["CPU","GPU","RAM","PSU","Disk","Motherboard"])
-            if ctype == "CPU":
-                cpu = generate_cpu()
-                writer_comp.writerow([cid, cpu["name"], cpu["brand"], cpu["type"]])
-                component_data[cid] = cpu
-            elif ctype == "Motherboard":
-                # generujemy nowy CPU tylko do płyty głównej
-                mb = generate_motherboard(generate_cpu())
-                writer_comp.writerow([cid, mb["name"], mb["brand"], mb["type"]])
-                component_data[cid] = mb
-            elif ctype == "GPU":
-                gpu = generate_gpu()
-                writer_comp.writerow([cid, gpu["name"], gpu["brand"], gpu["type"]])
-                component_data[cid] = gpu
-            elif ctype == "RAM":
-                ram = generate_ram()
-                writer_comp.writerow([cid, ram["name"], ram["brand"], ram["type"]])
-                component_data[cid] = ram
-            elif ctype == "PSU":
-                psu = generate_psu()
-                writer_comp.writerow([cid, psu["name"], psu["brand"], psu["type"]])
-                component_data[cid] = psu
-            elif ctype == "Disk":
-                disk = generate_disk()
-                writer_comp.writerow([cid, disk["name"], disk["brand"], disk["type"]])
-                component_data[cid] = disk
-            component_ids.append(cid)
-            cid += 1
+    with open("tables/components.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","name","brand","type"])
+
+    # Subtables
+    subtable_files = {
+        "CPU":"tables/cpus.csv",
+        "GPU":"tables/gpus.csv",
+        "RAM":"tables/rams.csv",
+        "PSU":"tables/psus.csv",
+        "Disk":"tables/disks.csv",
+        "Motherboard":"tables/motherboards.csv"
+    }
+    for fpath in subtable_files.values():
+        with open(fpath,"w",newline='',encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            if "cpu" in fpath: writer.writerow(["id_component","cores","threads","clock_speed","chipset","socket"])
+            elif "gpu" in fpath: writer.writerow(["id_component","vram","vram_type"])
+            elif "ram" in fpath: writer.writerow(["id_component","memory","socket_type","clock"])
+            elif "psu" in fpath: writer.writerow(["id_component","power"])
+            elif "disk" in fpath: writer.writerow(["id_component","memory","disk_type"])
+            elif "motherboard" in fpath: writer.writerow(["id_component","chipset","socket_type","ram_type"])
+
+    # Generowanie komponentów
+    for cid in range(1, total_components+1):
+        ctype = random.choice(list(subtable_files.keys()))
+        if ctype=="CPU":
+            cpu = generate_cpu()
+            with open("tables/components.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,cpu["name"],cpu["brand"],cpu["type"]])
+            with open("tables/cpus.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,cpu["cores"],cpu["threads"],cpu["clock_speed"],cpu["chipset"],cpu["socket"]])
+            component_data[cid]=cpu
+        elif ctype=="GPU":
+            gpu = generate_gpu()
+            with open("tables/components.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,gpu["name"],gpu["brand"],gpu["type"]])
+            with open("tables/gpus.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,gpu["vram"],gpu["vram_type"]])
+            component_data[cid]=gpu
+        elif ctype=="RAM":
+            ram = generate_ram()
+            with open("tables/components.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,ram["name"],ram["brand"],ram["type"]])
+            with open("tables/rams.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,ram["memory"],ram["socket_type"],ram["clock"]])
+            component_data[cid]=ram
+        elif ctype=="PSU":
+            psu = generate_psu()
+            with open("tables/components.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,psu["name"],psu["brand"],psu["type"]])
+            with open("tables/psus.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,psu["power"]])
+            component_data[cid]=psu
+        elif ctype=="Disk":
+            disk = generate_disk()
+            with open("tables/components.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,disk["name"],disk["brand"],disk["type"]])
+            with open("tables/disks.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,disk["memory"],disk["disk_type"]])
+            component_data[cid]=disk
+        elif ctype=="Motherboard":
+            mb = generate_motherboard(generate_cpu())
+            with open("tables/components.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,mb["name"],mb["brand"],mb["type"]])
+            with open("tables/motherboards.csv","a",newline='',encoding='utf-8-sig') as f:
+                writer = csv.writer(f); writer.writerow([cid,mb["chipset"],mb["socket_type"],mb["ram_type"]])
+            component_data[cid]=mb
+        component_ids.append(cid)
 
     # --- Oferty eksportera ---
     comp_base_prices = {}
@@ -239,14 +273,8 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
             num_sales = random.randint(1,5)
             for _ in range(num_sales):
                 client_id = random.choice(clients)
-                # poprawione generowanie daty sprzedaży
                 delivery_start = record["delivery_start"]
-                delivery_end = record["delivery_end"]
-                random_time = time(
-                    hour=random.randint(8, 20),
-                    minute=random.randint(0, 59),
-                    second=random.randint(0, 59)
-                )
+                random_time = time(hour=random.randint(8, 20), minute=random.randint(0, 59), second=random.randint(0, 59))
                 sale_date = datetime.combine(delivery_start, random_time)
                 base_price = comp_base_prices[comp_id]
                 markup = random.uniform(1.10,1.15)
