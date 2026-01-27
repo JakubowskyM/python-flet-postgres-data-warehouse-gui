@@ -2,7 +2,8 @@ import csv
 import os
 import random
 from faker import Faker
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
+
 import math
 
 fake = Faker('pl_PL')
@@ -110,13 +111,13 @@ def generate_address():
         "house_number": fake.building_number()
     }
 
-# --- Generator CSV ---
+# --- Generator CSV logiczny dla OLAP ---
 def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count = 300,
-                        exporters_count = 10, total_components = 1000):
+                        exporters_count = 10, total_components = 100):
 
     os.makedirs("tables", exist_ok=True)
 
-    # --- Addresses ---
+    # --- Adresy ---
     addresses = []
     with open("tables/addresses.csv", "w", newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
@@ -126,7 +127,7 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
             writer.writerow([i, addr["voivodeship"], addr["town"], addr["postal_code"], addr["street"], addr["house_number"]])
             addresses.append(i)
 
-    # --- Shops ---
+    # --- Sklepy ---
     shops = []
     with open("tables/shops.csv", "w", newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
@@ -135,7 +136,7 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
             writer.writerow([i, random.choice(addresses), fake.company()])
             shops.append(i)
 
-    # --- Clients ---
+    # --- Klienci ---
     clients = []
     with open("tables/clients.csv", "w", newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
@@ -144,7 +145,7 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
             writer.writerow([i, fake.first_name(), fake.last_name(), random.choice(addresses)])
             clients.append(i)
 
-    # --- Exporters ---
+    # --- Eksporterzy ---
     exporters = []
     countries = ['Poland','Germany','USA','China','Japan']
     with open("tables/exporters.csv", "w", newline='', encoding='utf-8-sig') as f:
@@ -154,42 +155,45 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
             writer.writerow([i, fake.company(), random.choice(countries)])
             exporters.append(i)
 
-    # --- Components ---
+    # --- Komponenty ---
     component_ids = []
-    comp_base_prices = {}
+    component_data = {}
     with open("tables/components.csv", "w", newline='', encoding='utf-8-sig') as f_comp:
         writer_comp = csv.writer(f_comp)
         writer_comp.writerow(["id","name","brand","type"])
         cid = 1
         while cid <= total_components:
-            ctype = random.choice(["CPU","GPU","RAM","PSU","Disk"])
+            ctype = random.choice(["CPU","GPU","RAM","PSU","Disk","Motherboard"])
             if ctype == "CPU":
                 cpu = generate_cpu()
                 writer_comp.writerow([cid, cpu["name"], cpu["brand"], cpu["type"]])
-                component_ids.append(cid)
-                cid += 1
+                component_data[cid] = cpu
+            elif ctype == "Motherboard":
+                # generujemy nowy CPU tylko do płyty głównej
+                mb = generate_motherboard(generate_cpu())
+                writer_comp.writerow([cid, mb["name"], mb["brand"], mb["type"]])
+                component_data[cid] = mb
             elif ctype == "GPU":
                 gpu = generate_gpu()
                 writer_comp.writerow([cid, gpu["name"], gpu["brand"], gpu["type"]])
-                component_ids.append(cid)
-                cid += 1
+                component_data[cid] = gpu
             elif ctype == "RAM":
                 ram = generate_ram()
                 writer_comp.writerow([cid, ram["name"], ram["brand"], ram["type"]])
-                component_ids.append(cid)
-                cid += 1
+                component_data[cid] = ram
             elif ctype == "PSU":
                 psu = generate_psu()
                 writer_comp.writerow([cid, psu["name"], psu["brand"], psu["type"]])
-                component_ids.append(cid)
-                cid += 1
+                component_data[cid] = psu
             elif ctype == "Disk":
                 disk = generate_disk()
                 writer_comp.writerow([cid, disk["name"], disk["brand"], disk["type"]])
-                component_ids.append(cid)
-                cid += 1
+                component_data[cid] = disk
+            component_ids.append(cid)
+            cid += 1
 
-    # --- Exporter Offers ---
+    # --- Oferty eksportera ---
+    comp_base_prices = {}
     with open("tables/exporter_offers.csv","w",newline='',encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(["id","id_exporter","id_component","price"])
@@ -198,27 +202,33 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
             comp_base_prices[comp_id] = price
             writer.writerow([i, random.choice(exporters), comp_id, f"{price:.2f}"])
 
-    # --- Imports ---
+    # --- Importy ---
     import_records = []
     with open("tables/imports.csv","w",newline='',encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(["id","id_component","id_shop","id_exporter","delivery_type",
                         "delivery_placement_date","expected_delivery_date","real_delivery_date",
                         "component_quantity","sum_of_import"])
-        for i in range(1,10001):
-            comp_id = random.choice(component_ids)
-            shop_id = random.choice(shops)
-            exporter_id = random.choice(exporters)
-            delivery_start = fake.date_between(start_date='-365d', end_date='-345d')
-            delivery_end = delivery_start + timedelta(days=random.randint(1,14))
-            quantity = random.randint(1, 10)
-            sum_import = comp_base_prices[comp_id] * quantity
-            writer.writerow([i, comp_id, shop_id, exporter_id, random.choice(['Air','Sea','Land']),
-                             delivery_start, delivery_end, delivery_end + timedelta(days=random.randint(0,2)),
-                             quantity, f"{sum_import:.2f}"])
-            import_records.append({"comp_id": comp_id, "shop_id": shop_id, "quantity": quantity})
+        imp_id = 1
+        for comp_id in component_ids:
+            num_imports = random.randint(1,10)
+            for _ in range(num_imports):
+                shop_id = random.choice(shops)
+                exporter_id = random.choice(exporters)
+                delivery_start = fake.date_between(start_date='-365d', end_date='-345d')
+                delivery_end = delivery_start + timedelta(days=random.randint(1,14))
+                quantity = 1
+                sum_import = comp_base_prices[comp_id] * quantity
+                writer.writerow([imp_id, comp_id, shop_id, exporter_id,
+                                 random.choice(['Air','Sea','Land']),
+                                 delivery_start, delivery_end,
+                                 delivery_end + timedelta(days=random.randint(0,2)),
+                                 quantity, f"{sum_import:.2f}"])
+                import_records.append({"comp_id": comp_id, "shop_id": shop_id, "quantity": quantity, "cost": sum_import,
+                                       "delivery_start": delivery_start, "delivery_end": delivery_end})
+                imp_id += 1
 
-    # --- Sales ---
+    # --- Sprzedaż ---
     with open("tables/sales.csv","w",newline='',encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(["id","id_component","id_client","id_shop","date_of_sell","price","quantity"])
@@ -226,16 +236,22 @@ def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count =
         for record in import_records:
             comp_id = record["comp_id"]
             shop_id = record["shop_id"]
-            max_qty = record["quantity"]
-            qty_to_sell = random.randint(1, max_qty)
-            for _ in range(qty_to_sell):
+            num_sales = random.randint(1,5)
+            for _ in range(num_sales):
                 client_id = random.choice(clients)
-                sale_date = datetime.now() - timedelta(days=random.randint(0,60))
-                base_p = comp_base_prices[comp_id]
+                # poprawione generowanie daty sprzedaży
+                delivery_start = record["delivery_start"]
+                delivery_end = record["delivery_end"]
+                random_time = time(
+                    hour=random.randint(8, 20),
+                    minute=random.randint(0, 59),
+                    second=random.randint(0, 59)
+                )
+                sale_date = datetime.combine(delivery_start, random_time)
+                base_price = comp_base_prices[comp_id]
                 markup = random.uniform(1.10,1.15)
-                new_price_raw = base_p * markup
-                final_sale_price = math.floor(new_price_raw) + random.choice([0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
-                writer.writerow([sale_id, comp_id, client_id, shop_id, sale_date, f"{final_sale_price:.2f}", 1])
+                final_price = math.floor(base_price * markup) + random.choice([0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+                writer.writerow([sale_id, comp_id, client_id, shop_id, sale_date, f"{final_price:.2f}", 1])
                 sale_id += 1
 
     return 1

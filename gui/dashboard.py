@@ -58,11 +58,6 @@ def show_dashboard_view(conn, page):
                         color="white"
                     )
                 ),
-                ft.Chip(
-                    label=ft.Text("Połączono z PostgreSQL", color="white"),
-                    leading=ft.Icon(ft.Icons.CHECK_CIRCLE, color="GREEN"),
-                    bgcolor=BACKGROUND
-                )
             ]
         )
     )
@@ -75,13 +70,14 @@ def show_dashboard_view(conn, page):
     
     query_dropdown = ft.Dropdown(
         label="Wybierz operację OLAP",
+        label_style=ft.TextStyle(color=DARK_PURPLE),
         options=[ft.dropdown.Option(key=k, text=n) for k, n in OLAPQueries.get_all_queries()],
         width=280,
         on_change=on_query_selected,
         border_color=DARK_PURPLE
     )
 
-    query_info = ft.Container(content=ft.Text("Wybierz operację..."), padding=10)
+    query_info = ft.Container(content=ft.Text("Wybierz operację...", color=DARK_PURPLE), padding=10)
     
     # --- PANEL PARAMETRÓW ---
     params_container = ft.Column([], spacing=12)
@@ -94,7 +90,7 @@ def show_dashboard_view(conn, page):
         content=ft.Column(
             [
                 ft.Text(
-                    "2️⃣ Parametry zapytania",
+                    "Parametry zapytania",
                     size=14,
                     weight=ft.FontWeight.BOLD,
                     color=DARK_PURPLE
@@ -269,7 +265,7 @@ def show_dashboard_view(conn, page):
     )
 
     # --- LAYOUT ---
-    query_section = section("1️⃣ Wybór operacji", [query_dropdown, query_info])
+    query_section = section("Wybór operacji", [query_dropdown, query_info])
     execute_section = section("Wykonanie", [run_btn])
 
     left_panel = ft.Container(
