@@ -79,8 +79,8 @@ def generate_structure(db_name: str, password: str,
             
             os.makedirs("tables", exist_ok=True)
             rddb.generate_csv_files(
-                addresses_count=50, shops_count=10,
-                clients_count=100, exporters_count=5,
+                addresses_count=100, shops_count=10,
+                clients_count=1000, exporters_count=50,
                 total_components=100
             )
             print("Pliki CSV wygenerowane.")

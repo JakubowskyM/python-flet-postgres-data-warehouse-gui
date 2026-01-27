@@ -27,7 +27,7 @@ class OLAPQueries:
                 ORDER BY calkowity_przychod DESC
             """,
             "params": [
-                {"name": "rok", "type": "number", "label": "Rok", "default": 2024},
+                {"name": "rok", "type": "number", "label": "Rok", "default": 2026},
                 {"name": "typ", "type": "select", "label": "Typ komponentu", 
                  "options": ["CPU", "GPU", "RAM", "PSU", "Disk", "Motherboard"]}
             ],
@@ -51,8 +51,8 @@ class OLAPQueries:
                 ORDER BY rok, kwartal, przychod DESC
             """,
             "params": [
-                {"name": "rok_od", "type": "number", "label": "Rok od", "default": 2023},
-                {"name": "rok_do", "type": "number", "label": "Rok do", "default": 2024}
+                {"name": "rok_od", "type": "number", "label": "Rok od", "default": 2025},
+                {"name": "rok_do", "type": "number", "label": "Rok do", "default": 2026}
             ],
             "columns": ["Rok", "Kwartał", "Marka", "Liczba sprzedaży", "Przychód"]
         },
@@ -76,7 +76,7 @@ class OLAPQueries:
                 ORDER BY przychod DESC
             """,
             "params": [
-                {"name": "rok", "type": "number", "label": "Rok", "default": 2024},
+                {"name": "rok", "type": "number", "label": "Rok", "default": 2026},
                 {"name": "woj", "type": "text", "label": "Województwo", "default": "mazowieckie"}
             ],
             "columns": ["Województwo", "Miasto", "Ulica", "Sklep", "Przychód"]
@@ -102,7 +102,7 @@ class OLAPQueries:
             "params": [
                 {"name": "typ", "type": "select", "label": "Wybierz typ", 
                  "options": ["CPU", "GPU", "RAM", "PSU", "Disk", "Motherboard"]},
-                {"name": "rok", "type": "number", "label": "Rok", "default": 2024}
+                {"name": "rok", "type": "number", "label": "Rok", "default": 2026}
             ],
             "columns": ["Marka", "Model", "Miesiąc", "Sprzedaż", "Przychód"]
         },
@@ -131,7 +131,7 @@ class OLAPQueries:
             "params": [
                 {"name": "typ", "type": "select", "label": "Typ komponentu", 
                  "options": ["CPU", "GPU", "RAM", "PSU", "Disk", "Motherboard"]},
-                {"name": "rok", "type": "number", "label": "Rok", "default": 2024},
+                {"name": "rok", "type": "number", "label": "Rok", "default": 2026},
                 {"name": "kwartal", "type": "number", "label": "Kwartał", "default": 1},
                 {"name": "woj", "type": "text", "label": "Województwo", "default": "mazowieckie"}
             ],
@@ -196,7 +196,7 @@ class OLAPQueries:
                 ORDER BY miesiac
             """,
             "params": [
-                {"name": "rok", "type": "number", "label": "Rok", "default": 2024},
+                {"name": "rok", "type": "number", "label": "Rok", "default": 2026},
                 {"name": "typ", "type": "select", "label": "Typ", 
                  "options": ["CPU", "GPU", "RAM", "PSU", "Disk", "Motherboard"]}
             ],

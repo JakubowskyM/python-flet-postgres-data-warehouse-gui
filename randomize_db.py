@@ -111,7 +111,7 @@ def generate_address():
     }
 
 # --- Generator CSV ---
-def generate_csv_files(*, addresses_count = 200, shops_count = 5, clients_count = 300,
+def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count = 300,
                         exporters_count = 10, total_components = 1000):
 
     os.makedirs("tables", exist_ok=True)
