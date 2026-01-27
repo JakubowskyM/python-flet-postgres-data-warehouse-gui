@@ -2,114 +2,164 @@ import os
 import csv
 import psycopg2
 from psycopg2 import sql
-import randomize_db as rddb  # Twój moduł generujący CSV
+import randomize_db as rddb
 
-def generate_structure(db_name: str, password: str,
-                       generate_csv=True):
+def database_exists(db_name: str, password: str):
+    """
+    Returns:
+    - "exists"      -> baza już istnieje
+    - "not_exists"  -> baza nie istnieje
+    - "auth_error"  -> błędne hasło / brak dostępu do serwera
+    """
 
+    try:
+        conn = psycopg2.connect(
+            host="localhost",
+            database="postgres",
+            user="postgres",
+            password=password,
+            connect_timeout=3
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
 
-    # Connect to PostgreSQL server to create database
+        cur.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s",
+            (db_name,)
+        )
 
-    conn = psycopg2.connect(
-        host="localhost",
-        database="postgres",
-        user="postgres",
-        password=password
-    )
-    conn.autocommit = True
-    cur = conn.cursor()
+        exists = cur.fetchone() is not None
 
-    # Check if database exists
-
-    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
-    if cur.fetchone():
-        print(f"Database '{db_name}' already exists.\n")
         cur.close()
         conn.close()
-        return 0
 
-    cur.execute(
-        sql.SQL("CREATE DATABASE {} OWNER {}").format(
-            sql.Identifier(db_name),
-            sql.Identifier('postgres')
-        )
-    )
-    print(f"Database '{db_name}' created.\n")
-    cur.close()
-    conn.close()
+        return "exists" if exists else "not_exists"
 
-    # CSV generation with random data
-    
-    if generate_csv:
-        os.makedirs("tables", exist_ok=True)
-        rddb.generate_csv_files(addresses_count=50, shops_count=10,
-                                clients_count=100, exporters_count=5,
-                                total_components=100)
+    except psycopg2.OperationalError:
+        # typowy błąd: złe hasło / brak połączenia
+        return "auth_error"
+
+    except Exception as e:
+        print("Nieoczekiwany błąd:", e)
+        return "auth_error"
 
 
-    # Connect to the newly created database and create structure
+def generate_structure(db_name: str, password: str,
+                       generate_csv: bool, create_db: bool):
+    """
+    Function operates in two modes:
+    1. Creating a new database (create_db=True, generate_csv=True)
+       - checks connection to the server
+       - generates CSV files
+       - creates the database
+       - creates structure and imports data
+       - returns 1 if success, 0 if error
+    2. Login to existing database (create_db=False, generate_csv=False)
+       - checks connection to existing database
+       - returns psycopg2 connection object if OK, 0 if error
+    """
 
-    conn = psycopg2.connect(
-        host="localhost",
-        database=db_name,
-        user="postgres",
-        password=password
-    )
-    conn.autocommit = True
-    cur = conn.cursor()
-
-    sql_file_path = "database/database_skeleton.sql"
-    with open(sql_file_path, "r", encoding="utf-8") as f:
-        sql_content = f.read()
-
-    for stmt in sql_content.split(";"):
-        stmt = stmt.strip()
-        if stmt:
-            cur.execute(stmt)
-
-    print(f"Structure of database '{db_name}' created.\n")
-
-    
-    # Data import from CSV files
-    fk_safe_order = [
-        "addresses",
-        "exporters",
-        "components",
-        "shops",
-        "clients",
-        "cpus",
-        "gpus",
-        "rams",
-        "psus",
-        "disks",
-        "motherboards",
-        "exporter_offers",
-        "imports",
-        "sales"
-    ]
-
-    for table_name in fk_safe_order:
-        file_path = os.path.join("tables", f"{table_name}.csv")
-        if not os.path.exists(file_path):
-            continue
-
-        with open(file_path, newline='', encoding="utf-8-sig") as csvfile:
-            reader = csv.reader(csvfile)
-            headers = next(reader)  # nagłówki
-            headers = [h.strip('"') for h in headers]  # strip quotes from headers
-
-            for row in reader:
-                placeholders = ','.join(['%s'] * len(row))
-                insert_stmt = sql.SQL('INSERT INTO {} ({}) VALUES ({})').format(
-                    sql.Identifier(table_name),
-                    sql.SQL(',').join(map(sql.Identifier, headers)),
-                    sql.SQL(placeholders)
+    if not create_db and not generate_csv:
+            try:
+                conn = psycopg2.connect(
+                    host="localhost",
+                    database=db_name,
+                    user="postgres",
+                    password=password
                 )
-                cur.execute(insert_stmt, row)
+                conn.autocommit = True
+                print(type(conn))
+                print(f"Połączono z istniejącą bazą '{db_name}'.")
+                return conn
+            except Exception as e:
+                return 0
+                
 
-    print(f"Data imported from CSV files in 'tables'.")
-    cur.close()
-    conn.close()
-    return 1
+    elif create_db and generate_csv:
+            
+            os.makedirs("tables", exist_ok=True)
+            rddb.generate_csv_files(
+                addresses_count=100, shops_count=10,
+                clients_count=1000, exporters_count=50,
+                total_components=100
+            )
+            print("Pliki CSV wygenerowane.")
 
-generate_structure("my_database", "milosz", generate_csv=True)
+
+            conn = psycopg2.connect(
+                host="localhost",
+                database="postgres",
+                user="postgres",
+                password=password
+            )
+            conn.autocommit = True
+            cur = conn.cursor()
+
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+            if cur.fetchone():
+                print(f"Baza '{db_name}' już istnieje.")
+                cur.close()
+                conn.close()
+                return 0
+
+            cur.execute(
+                sql.SQL("CREATE DATABASE {} OWNER {}").format(
+                    sql.Identifier(db_name),
+                    sql.Identifier("postgres")
+                )
+            )
+            print(f"Baza '{db_name}' utworzona.")
+            cur.close()
+            conn.close()
+
+            conn = psycopg2.connect(
+                host="localhost",
+                database=db_name,
+                user="postgres",
+                password=password
+            )
+            conn.autocommit = True
+            cur = conn.cursor()
+
+            sql_file_path = "database/database_skeleton.sql"
+            try:
+                with open(sql_file_path, "r", encoding="utf-8") as f:
+                    sql_content = f.read()
+            except UnicodeDecodeError:
+                print("Błąd odczytu pliku SQL – sprawdź kodowanie pliku.")
+                cur.close()
+                conn.close()
+                return 0
+
+            for stmt in sql_content.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    cur.execute(stmt)
+            print(f"Struktura bazy '{db_name}' utworzona.")
+
+            fk_safe_order = [
+                "addresses","exporters","components","shops","clients",
+                "cpus","gpus","rams","psus","disks","motherboards",
+                "exporter_offers","imports","sales"
+            ]
+            for table_name in fk_safe_order:
+                file_path = os.path.join("tables", f"{table_name}.csv")
+                if not os.path.exists(file_path):
+                    continue
+                with open(file_path, newline='', encoding="utf-8-sig") as csvfile:
+                    reader = csv.reader(csvfile)
+                    headers = next(reader)
+                    headers = [h.strip('"') for h in headers]
+                    for row in reader:
+                        placeholders = ','.join(['%s'] * len(row))
+                        insert_stmt = sql.SQL('INSERT INTO {} ({}) VALUES ({})').format(
+                            sql.Identifier(table_name),
+                            sql.SQL(',').join(map(sql.Identifier, headers)),
+                            sql.SQL(placeholders)
+                        )
+                        cur.execute(insert_stmt, row)
+            print("Import CSV zakończony.")
+
+            cur.close()
+            conn.close()
+            return 1
