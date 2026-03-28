@@ -1,20 +1,32 @@
-import psycopg2
-from faker import Faker
+import csv
+import os
 import random
-from datetime import datetime, timedelta
+from faker import Faker
+from datetime import datetime, timedelta, time
+
+import math
 
 fake = Faker('pl_PL')
 
-#Polish voivedoships
-
-voivodeships = [
-    "dolnośląskie", "kujawsko-pomorskie", "lubelskie", "lubuskie",
-    "łódzkie", "małopolskie", "mazowieckie", "opolskie",
-    "podkarpackie", "podlaskie", "pomorskie", "śląskie",
-    "świętokrzyskie", "warmińsko-mazurskie", "wielkopolskie", "zachodniopomorskie"
-]
-
-#Brands
+# --- Dane pomocnicze ---
+PL_CITIES = {
+    "mazowieckie": ["Warszawa", "Radom", "Płock", "Siedlce", "Ostrołęka", "Pruszków", "Legionowo", "Piaseczno", "Mińsk Mazowiecki"],
+    "małopolskie": ["Kraków", "Tarnów", "Nowy Sącz", "Oświęcim", "Zakopane", "Wadowice", "Chrzanów", "Bochnia"],
+    "śląskie": ["Katowice", "Gliwice", "Zabrze", "Rybnik", "Częstochowa", "Sosnowiec", "Bytom", "Tychy", "Dąbrowa Górnicza", "Bielsko-Biała", "Jaworzno"],
+    "wielkopolskie": ["Poznań", "Kalisz", "Konin", "Leszno", "Piła", "Gniezno", "Ostrów Wielkopolski", "Krotoszyn"],
+    "dolnośląskie": ["Wrocław", "Legnica", "Wałbrzych", "Jelenia Góra", "Lubin", "Świdnica", "Głogów", "Bolesławiec"],
+    "pomorskie": ["Gdańsk", "Gdynia", "Sopot", "Słupsk", "Wejherowo", "Rumia", "Starogard Gdański", "Tczew"],
+    "zachodniopomorskie": ["Szczecin", "Koszalin", "Stargard", "Kołobrzeg", "Świnoujście", "Szczecinek"],
+    "lubelskie": ["Lublin", "Chełm", "Zamość", "Biała Podlaska", "Puławy", "Świdnik", "Kraśnik"],
+    "łódzkie": ["Łódź", "Piotrków Trybunalski", "Tomaszów Mazowiecki", "Bełchatów", "Skierniewice", "Zgierz", "Pabianice"],
+    "podkarpackie": ["Rzeszów", "Przemyśl", "Stalowa Wola", "Mielec", "Tarnobrzeg", "Krosno", "Sanok", "Jarosław"],
+    "kujawsko-pomorskie": ["Bydgoszcz", "Toruń", "Włocławek", "Grudziądz", "Inowrocław", "Brodnica"],
+    "warmińsko-mazurskie": ["Olsztyn", "Elbląg", "Ełk", "Ostróda", "Giżycko", "Iława"],
+    "podlaskie": ["Białystok", "Suwałki", "Łomża", "Augustów", "Zambrów", "Bielsk Podlaski"],
+    "opolskie": ["Opole", "Kędzierzyn-Koźle", "Nysa", "Brzeg", "Kluczbork", "Prudnik"],
+    "lubuskie": ["Gorzów Wielkopolski", "Zielona Góra", "Nowa Sól", "Żary", "Żagań", "Świebodzin"],
+    "świętokrzyskie": ["Kielce", "Ostrowiec Świętokrzyski", "Starachowice", "Skarżysko-Kamienna", "Sandomierz", "Końskie"]
+}
 
 brands = {
     "CPU": ["Intel", "AMD"],
@@ -36,32 +48,35 @@ cpu_sockets = {
 ram_types = ["DDR3", "DDR4", "DDR5"]
 disk_types = ["HDD", "SSD"]
 
+def generate_price_with_step(min_val, max_val):
+    base = random.randint(min_val, max_val)
+    decimal = random.choice([0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+    return round(base + decimal, 2)
 
-#Functions for generating components
-
+# --- Generatory komponentów ---
 def generate_cpu():
     brand = random.choice(brands["CPU"])
-    name = f"{brand} CPU {random.randint(1000,9999)}"
-    cores = random.randint(2,64)
-    threads = random.randint(max(cores,4),128)
-    clock = round(random.randrange(20,61)/10,1)
     chipset = random.choice(cpu_chipsets[brand])
+    cores = random.randint(2,32)
+    threads = random.randint(max(cores,4),64)
+    name = f"{brand} {chipset} {cores}/{threads}"
+    clock = round(random.randrange(20,61)/10,1)
     socket = random.choice(cpu_sockets[brand])
     return {"type":"CPU","brand":brand,"name":name,"cores":cores,"threads":threads,"clock":clock,"chipset":chipset,"socket":socket}
 
 def generate_gpu():
     brand = random.choice(brands["GPU"])
-    name = f"{brand} GPU {random.randint(1000,9999)}"
     vram = random.choice([4,6,8,12,16,24])
     vram_type = random.choice(["GDDR5","GDDR6","HBM2"])
+    name = f"{brand} {vram}GB {vram_type}"
     return {"type":"GPU","brand":brand,"name":name,"vram":vram,"vram_type":vram_type}
 
 def generate_ram():
     brand = random.choice(brands["RAM"])
     memory = random.choice([8,16,32,64])
-    name = f"{brand} RAM {memory}GB"
     socket_type = random.choice(ram_types)
     clock = random.choice([2133,2400,2666,3000,3200,3600,4000])
+    name = f"{brand} {memory}GB {clock}MHz"
     return {"type":"RAM","brand":brand,"name":name,"memory":memory,"socket_type":socket_type,"clock":clock}
 
 def generate_psu():
@@ -75,164 +90,168 @@ def generate_disk():
     capacity = random.choice([128,256,512,1024,2048,4096,6144])
     disk_type = random.choice(disk_types)
     name = f"{brand} {capacity if capacity<1024 else capacity//1024} {'GB' if capacity<1024 else 'TB'} {disk_type}"
-    memory = capacity if capacity<1024 else capacity
-    return {"type":"Disk","brand":brand,"name":name,"memory":memory,"disk_type":disk_type}
+    return {"type":"Disk","brand":brand,"name":name,"memory":capacity,"disk_type":disk_type}
 
 def generate_motherboard(cpu_info):
     brand = random.choice(brands["Motherboard"])
-    name = f"{brand} Motherboard {random.randint(100,999)}"
     chipset = cpu_info["chipset"]
     socket = cpu_info["socket"]
     ram_type = random.choice(ram_types)
+    name = f"{brand} {socket} {chipset} {ram_type}"
     return {"type":"Motherboard","brand":brand,"name":name,"chipset":chipset,"socket":socket,"ram_type":ram_type}
 
-#PostgreSQL db connection
-conn = psycopg2.connect(
-    host="localhost",
-    database="yours_db_name",
-    user="yours_db_user",
-    password="yours_db_pswd"
-)
-cur = conn.cursor()
+def generate_address():
+    voivodeship = random.choice(list(PL_CITIES.keys()))
+    city = random.choice(PL_CITIES[voivodeship])
+    return {
+        "voivodeship": voivodeship,
+        "town": city,
+        "postal_code": fake.postcode(),
+        "street": fake.street_name(),
+        "house_number": fake.building_number()
+    }
 
-#Adresses generator
-addresses_count = 50
-for i in range(1, addresses_count + 1):
-    cur.execute("""
-        INSERT INTO "Addresses" ("Id","Voivodeship","Town","Postal_code","Street_name","House_number")
-        VALUES (%s,%s,%s,%s,%s,%s)
-    """,(i,random.choice(voivodeships),fake.city(),fake.postcode(),fake.street_name(),fake.building_number()))
+# --- Generator CSV logiczny dla OLAP ---
+def generate_csv_files(*, addresses_count = 50, shops_count = 5, clients_count = 300,
+                        exporters_count = 10, total_components = 100):
 
-#Shops generator
-shops_count = 10
-for i in range(1, shops_count+1):
-    cur.execute("""
-        INSERT INTO "Shops" ("Id","Id_address","Name") VALUES (%s,%s,%s)
-    """,(i,random.randint(1,addresses_count),fake.company()))
+    os.makedirs("tables", exist_ok=True)
 
-#Clients generator
-clients_count = 100
-for i in range(1, clients_count+1):
-    cur.execute("""
-        INSERT INTO "Clients" ("Id","Name","Surname","Id_address")
-        VALUES (%s,%s,%s,%s)
-    """,(i,fake.first_name(),fake.last_name(),random.randint(1,addresses_count)))
+    # --- Adresy ---
+    addresses = []
+    with open("tables/addresses.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","voivodeship","town","postal_code","street_name","house_number"])
+        for i in range(1, addresses_count+1):
+            addr = generate_address()
+            writer.writerow([i, addr["voivodeship"], addr["town"], addr["postal_code"], addr["street"], addr["house_number"]])
+            addresses.append(i)
 
-#Exporters generator
-exporters_count = 5
-countries = ['Poland','Germany','USA','China','Japan']
-for i in range(1, exporters_count+1):
-    cur.execute("""
-        INSERT INTO "Exporters" ("Id","Name","Country") VALUES (%s,%s,%s)
-    """,(i,fake.company(),random.choice(countries)))
+    # --- Sklepy ---
+    shops = []
+    with open("tables/shops.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_address","name"])
+        for i in range(1, shops_count+1):
+            writer.writerow([i, random.choice(addresses), fake.company()])
+            shops.append(i)
 
-#Components generator
-component_id = 1
-total_components = 300
-component_list = []
+    # --- Klienci ---
+    clients = []
+    with open("tables/clients.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","name","surname","id_address"])
+        for i in range(1, clients_count+1):
+            writer.writerow([i, fake.first_name(), fake.last_name(), random.choice(addresses)])
+            clients.append(i)
 
-while component_id <= total_components:
-    ctype = random.choice(["CPU","GPU","RAM","PSU","Disk"])
-    if ctype == "CPU":
-        cpu = generate_cpu()
-        component_list.append(cpu)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,cpu["name"],cpu["brand"],cpu["type"]))
-        cur.execute("""
-            INSERT INTO "CPUs" ("Id_component","Cores","Threads","Clock_speed","Chipset","Socket")
-            VALUES (%s,%s,%s,%s,%s,%s)
-        """,(component_id,cpu["cores"],cpu["threads"],cpu["clock"],cpu["chipset"],cpu["socket"]))
+    # --- Eksporterzy ---
+    exporters = []
+    countries = ['Poland','Germany','USA','China','Japan']
+    with open("tables/exporters.csv", "w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","name","country"])
+        for i in range(1, exporters_count+1):
+            writer.writerow([i, fake.company(), random.choice(countries)])
+            exporters.append(i)
 
-        #adding matching motherboard
-        mb = generate_motherboard(cpu)
-        component_list.append(mb)
-        component_id +=1
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,mb["name"],mb["brand"],mb["type"]))
-        cur.execute("""
-            INSERT INTO "Motherboards" ("Id_component","Chipset","Socket_type","RAM_type")
-            VALUES (%s,%s,%s,%s)
-        """,(component_id,mb["chipset"],mb["socket"],mb["ram_type"]))
+    # --- Komponenty ---
+    component_ids = []
+    component_data = {}
+    with open("tables/components.csv", "w", newline='', encoding='utf-8-sig') as f_comp:
+        writer_comp = csv.writer(f_comp)
+        writer_comp.writerow(["id","name","brand","type"])
+        cid = 1
+        while cid <= total_components:
+            ctype = random.choice(["CPU","GPU","RAM","PSU","Disk","Motherboard"])
+            if ctype == "CPU":
+                cpu = generate_cpu()
+                writer_comp.writerow([cid, cpu["name"], cpu["brand"], cpu["type"]])
+                component_data[cid] = cpu
+            elif ctype == "Motherboard":
+                # generujemy nowy CPU tylko do płyty głównej
+                mb = generate_motherboard(generate_cpu())
+                writer_comp.writerow([cid, mb["name"], mb["brand"], mb["type"]])
+                component_data[cid] = mb
+            elif ctype == "GPU":
+                gpu = generate_gpu()
+                writer_comp.writerow([cid, gpu["name"], gpu["brand"], gpu["type"]])
+                component_data[cid] = gpu
+            elif ctype == "RAM":
+                ram = generate_ram()
+                writer_comp.writerow([cid, ram["name"], ram["brand"], ram["type"]])
+                component_data[cid] = ram
+            elif ctype == "PSU":
+                psu = generate_psu()
+                writer_comp.writerow([cid, psu["name"], psu["brand"], psu["type"]])
+                component_data[cid] = psu
+            elif ctype == "Disk":
+                disk = generate_disk()
+                writer_comp.writerow([cid, disk["name"], disk["brand"], disk["type"]])
+                component_data[cid] = disk
+            component_ids.append(cid)
+            cid += 1
 
-    elif ctype == "GPU":
-        gpu = generate_gpu()
-        component_list.append(gpu)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,gpu["name"],gpu["brand"],gpu["type"]))
-        cur.execute("""
-            INSERT INTO "GPUs" ("Id_component","VRAM","VRAM_type") VALUES (%s,%s,%s)
-        """,(component_id,gpu["vram"],gpu["vram_type"]))
+    # --- Oferty eksportera ---
+    comp_base_prices = {}
+    with open("tables/exporter_offers.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_exporter","id_component","price"])
+        for i, comp_id in enumerate(component_ids, 1):
+            price = generate_price_with_step(50,2000)
+            comp_base_prices[comp_id] = price
+            writer.writerow([i, random.choice(exporters), comp_id, f"{price:.2f}"])
 
-    elif ctype == "RAM":
-        ram = generate_ram()
-        component_list.append(ram)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,ram["name"],ram["brand"],ram["type"]))
-        cur.execute("""
-            INSERT INTO "RAMs" ("Id_component","Memory","Socket_type","Clock") VALUES (%s,%s,%s,%s)
-        """,(component_id,ram["memory"],ram["socket_type"],ram["clock"]))
+    # --- Importy ---
+    import_records = []
+    with open("tables/imports.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_component","id_shop","id_exporter","delivery_type",
+                        "delivery_placement_date","expected_delivery_date","real_delivery_date",
+                        "component_quantity","sum_of_import"])
+        imp_id = 1
+        for comp_id in component_ids:
+            num_imports = random.randint(1,10)
+            for _ in range(num_imports):
+                shop_id = random.choice(shops)
+                exporter_id = random.choice(exporters)
+                delivery_start = fake.date_between(start_date='-365d', end_date='-345d')
+                delivery_end = delivery_start + timedelta(days=random.randint(1,14))
+                quantity = 1
+                sum_import = comp_base_prices[comp_id] * quantity
+                writer.writerow([imp_id, comp_id, shop_id, exporter_id,
+                                 random.choice(['Air','Sea','Land']),
+                                 delivery_start, delivery_end,
+                                 delivery_end + timedelta(days=random.randint(0,2)),
+                                 quantity, f"{sum_import:.2f}"])
+                import_records.append({"comp_id": comp_id, "shop_id": shop_id, "quantity": quantity, "cost": sum_import,
+                                       "delivery_start": delivery_start, "delivery_end": delivery_end})
+                imp_id += 1
 
-    elif ctype == "PSU":
-        psu = generate_psu()
-        component_list.append(psu)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,psu["name"],psu["brand"],psu["type"]))
-        cur.execute("""
-            INSERT INTO "PSUs" ("Id_component","Power") VALUES (%s,%s)
-        """,(component_id,psu["power"]))
+    # --- Sprzedaż ---
+    with open("tables/sales.csv","w",newline='',encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(["id","id_component","id_client","id_shop","date_of_sell","price","quantity"])
+        sale_id = 1
+        for record in import_records:
+            comp_id = record["comp_id"]
+            shop_id = record["shop_id"]
+            num_sales = random.randint(1,5)
+            for _ in range(num_sales):
+                client_id = random.choice(clients)
+                # poprawione generowanie daty sprzedaży
+                delivery_start = record["delivery_start"]
+                delivery_end = record["delivery_end"]
+                random_time = time(
+                    hour=random.randint(8, 20),
+                    minute=random.randint(0, 59),
+                    second=random.randint(0, 59)
+                )
+                sale_date = datetime.combine(delivery_start, random_time)
+                base_price = comp_base_prices[comp_id]
+                markup = random.uniform(1.10,1.15)
+                final_price = math.floor(base_price * markup) + random.choice([0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+                writer.writerow([sale_id, comp_id, client_id, shop_id, sale_date, f"{final_price:.2f}", 1])
+                sale_id += 1
 
-    elif ctype == "Disk":
-        disk = generate_disk()
-        component_list.append(disk)
-        cur.execute("""
-            INSERT INTO "Components" ("Id","Name","Brand","Type") VALUES (%s,%s,%s,%s)
-        """,(component_id,disk["name"],disk["brand"],disk["type"]))
-        cur.execute("""
-            INSERT INTO "Disks" ("Id_component","Memory","Disk_type") VALUES (%s,%s,%s)
-        """,(component_id,disk["memory"],disk["disk_type"]))
-
-    component_id +=1
-
-#
-#Exporter offers generator
-#
-for i in range(1, total_components+1):
-    cur.execute("""
-        INSERT INTO "Exporter_offers" ("Id","Id_exporter","Id_component","Price")
-        VALUES (%s,%s,%s,%s)
-    """,(i,random.randint(1,exporters_count),i,round(random.uniform(50,2000),2)))
-
-#Imports to shops generator
-for i in range(1, 51):
-    delivery_start = datetime.now() - timedelta(days=random.randint(0,30))
-    delivery_end = delivery_start + timedelta(days=random.randint(1,10))
-    cur.execute("""
-        INSERT INTO "Imports" ("Id","Id_component","Id_shop","Id_exporter","Delivery_type",
-        "Delivery_placement_date","Expected_delivery_date","Real_delivery_date",
-        "Component_quantity","Sum_of_import")
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """,(i,random.randint(1,total_components),random.randint(1,shops_count),
-          random.randint(1,exporters_count),random.choice(['Air','Sea','Land']),
-          delivery_start,delivery_end,delivery_end + timedelta(days=random.randint(0,2)),
-          random.randint(1,50),round(random.uniform(100,10000),2)))
-
-#Sales generator
-for i in range(1, 101):
-    sale_date = datetime.now() - timedelta(days=random.randint(0,60))
-    cur.execute("""
-        INSERT INTO "Sales" ("Id","Id_component","Id_client","Id_shop","Date_of_sell","Price","Quantity")
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
-    """,(i,random.randint(1,total_components),random.randint(1,clients_count),
-          random.randint(1,shops_count),sale_date,round(random.uniform(50,2000),2),random.randint(1,5)))
-
-#Database committing and closing
-conn.commit()
-cur.close()
-conn.close()
-
-print("Your database was successfully filled with random data!")
+    return 1
